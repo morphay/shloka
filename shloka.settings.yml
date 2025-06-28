@@ -1,0 +1,32 @@
+structure:
+  bg:
+    chapters: 18
+    main_book_nid: null
+  sb:
+    songs: 12
+    chapters:
+      1: 19
+      2: 10
+      3: 13
+      4: 31
+      5: 26
+      6: 19
+      7: 15
+      8: 24
+      9: 24
+      10: 13
+      11: 31
+      12: 13
+    main_book_nid: null
+  cc:
+    lilas: 3
+    chapters:
+      adi: 17
+      madhya: 25
+      antya: 20
+    main_book_nid: null
+
+menu:
+  machine_name: navigaciya
+  
+text_format: content

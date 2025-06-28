@@ -1,0 +1,5 @@
+chapter_display:
+  version: 1.x
+  css:
+    theme:
+      css/chapter-display.css: {}

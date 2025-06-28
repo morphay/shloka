@@ -1,0 +1,217 @@
+<?php
+
+/**
+ * @file
+ * Исправление проблемы Menu Tree для БГ.
+ * Добавить в shloka.module
+ */
+
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
+use Drupal\node\NodeInterface;
+
+/**
+ * Implements hook_ENTITY_TYPE_view() for node entities.
+ */
+function shloka_node_view(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display, $view_mode) {
+  // Check if this is a chapter node
+  $chapter_types = ['bg_chapter', 'sb_chapter', 'cc_chapter'];
+  
+  if (!in_array($entity->bundle(), $chapter_types) || $view_mode !== 'full') {
+    return;
+  }
+  
+  /** @var \Drupal\shloka\Service\ChapterRenderer $chapter_renderer */
+  $chapter_renderer = \Drupal::service('shloka.chapter_renderer');
+  
+  // Get all verses for this chapter
+  $verses = $chapter_renderer->getChapterVerses($entity);
+  
+  if (empty($verses)) {
+    return;
+  }
+  
+  // Get current language
+  $language = \Drupal::languageManager()->getCurrentLanguage()->getId();
+  
+  // Render verses
+  $rendered_verses = $chapter_renderer->renderVerses($verses, $language);
+  
+  if (empty($rendered_verses)) {
+    return;
+  }
+  
+  // Add verses to the build
+  $build['chapter_verses'] = [
+    '#theme' => 'item_list',
+    '#items' => $rendered_verses,
+    '#attributes' => [
+      'class' => ['chapter-verses'],
+    ],
+    '#list_type' => 'div',
+    '#wrapper_attributes' => [
+      'class' => ['chapter-verses-wrapper'],
+    ],
+    '#weight' => 100,
+    '#cache' => [
+      'tags' => $entity->getCacheTags(),
+      'contexts' => ['languages:language_interface'],
+    ],
+  ];
+  
+  // Add CSS for verse separation
+  $build['#attached']['library'][] = 'shloka/chapter_display';
+}
+
+/**
+ * Implements hook_preprocess_book_navigation().
+ * 
+ * Убираем список дочерних элементов на страницах глав, 
+ * оставляя только навигацию prev/next/up.
+ */
+function shloka_preprocess_book_navigation(&$variables) {
+  // Получаем текущую ноду
+  $node = \Drupal::routeMatch()->getParameter('node');
+  
+  if (!$node || !$node instanceof \Drupal\node\NodeInterface) {
+    return;
+  }
+  
+  // Проверяем, является ли это страницей главы
+  $chapter_types = ['bg_chapter', 'sb_chapter', 'cc_chapter'];
+  
+  if (in_array($node->bundle(), $chapter_types)) {
+    // Удаляем дерево дочерних элементов, оставляя только prev/next/up навигацию
+    if (isset($variables['tree'])) {
+      unset($variables['tree']);
+    }
+    
+    // Также можно удалить children если они есть
+    if (isset($variables['children'])) {
+      unset($variables['children']);
+    }
+  }
+}
+
+/**
+ * Implements hook_page_attachments().
+ * 
+ * Подключаем JavaScript исправление для Menu Tree.
+ */
+function shloka_page_attachments(array &$attachments) {
+  // Подключаем исправление меню на всех страницах
+  $attachments['#attached']['library'][] = 'shloka/menu_fix';
+  
+  // Добавляем настройки для JavaScript
+  $attachments['#attached']['drupalSettings']['shloka']['menuFix'] = [
+    'bgPluginIds' => [
+      'url__ru_books_bg',
+      'url__ru_books_bg_1',
+      'url__ru_books_bg_2',
+      'url__ru_books_bg_3',
+      'url__ru_books_bg_4',
+      'url__ru_books_bg_5',
+      'url__ru_books_bg_6',
+      'url__ru_books_bg_7',
+      'url__ru_books_bg_8',
+      'url__ru_books_bg_9',
+      'url__ru_books_bg_10',
+      'url__ru_books_bg_11',
+      'url__ru_books_bg_12',
+      'url__ru_books_bg_13',
+      'url__ru_books_bg_14',
+      'url__ru_books_bg_15',
+      'url__ru_books_bg_16',
+      'url__ru_books_bg_17',
+      'url__ru_books_bg_18',
+    ],
+  ];
+}
+
+/**
+ * Implements hook_theme().
+ */
+function shloka_theme() {
+  return [
+    'chapter_verses' => [
+      'variables' => [
+        'verses' => [],
+        'chapter' => NULL,
+      ],
+    ],
+  ];
+}
+
+/**
+ * Implements hook_entity_presave().
+ */
+function shloka_entity_presave(EntityInterface $entity) {
+  // Auto-set book outline for new chapters/songs/lilas
+  if (!$entity instanceof NodeInterface || !$entity->isNew()) {
+    return;
+  }
+  
+  $types_with_book = [
+    'bg_chapter',
+    'sb_chapter',
+    'sb_song',
+    'cc_chapter',
+    'cc_lila',
+  ];
+  
+  if (!in_array($entity->bundle(), $types_with_book)) {
+    return;
+  }
+  
+  // Ensure book module fields are available
+  if (!$entity->hasField('book')) {
+    return;
+  }
+  
+  // If book is already set, don't override
+  if (!empty($entity->book['bid'])) {
+    return;
+  }
+  
+  // Auto-assign to appropriate book based on type
+  $config = \Drupal::config('shloka.settings');
+  
+  switch ($entity->bundle()) {
+    case 'bg_chapter':
+      $main_book_nid = $config->get('structure.bg.main_book_nid');
+      break;
+      
+    case 'sb_chapter':
+    case 'sb_song':
+      $main_book_nid = $config->get('structure.sb.main_book_nid');
+      break;
+      
+    case 'cc_chapter':
+    case 'cc_lila':
+      $main_book_nid = $config->get('structure.cc.main_book_nid');
+      break;
+      
+    default:
+      return;
+  }
+  
+  if (empty($main_book_nid)) {
+    return;
+  }
+  
+  $main_book = \Drupal::entityTypeManager()
+    ->getStorage('node')
+    ->load($main_book_nid);
+  
+  if (!$main_book) {
+    return;
+  }
+  
+  // Set basic book info
+  $entity->book = [
+    'bid' => $main_book->book['bid'] ?? $main_book->id(),
+    'pid' => $main_book->id(),
+    'has_children' => 0,
+    'weight' => 0,
+  ];
+}

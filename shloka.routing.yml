@@ -1,0 +1,7 @@
+shloka.admin:
+  path: '/admin/config/content/shloka'
+  defaults:
+    _form: '\Drupal\shloka\Form\ShlokaAdminForm'
+    _title: 'Shloka Settings'
+  requirements:
+    _permission: 'administer content'

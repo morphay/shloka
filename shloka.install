@@ -1,0 +1,184 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Shloka module.
+ */
+
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\Core\Field\FieldStorageDefinitionInterface;
+
+/**
+ * Implements hook_install().
+ */
+function shloka_install() {
+  // Create field_number field storage if it doesn't exist
+  if (!FieldStorageConfig::loadByName('node', 'field_number')) {
+    FieldStorageConfig::create([
+      'field_name' => 'field_number',
+      'entity_type' => 'node',
+      'type' => 'integer',
+      'settings' => [],
+      'cardinality' => 1,
+    ])->save();
+  }
+  
+  // Create field_title field storage if it doesn't exist
+  if (!FieldStorageConfig::loadByName('node', 'field_title')) {
+    FieldStorageConfig::create([
+      'field_name' => 'field_title',
+      'entity_type' => 'node',
+      'type' => 'text_long',
+      'settings' => [],
+      'cardinality' => 1,
+    ])->save();
+  }
+  
+  // Create reference fields
+  $reference_fields = [
+    'field_book_ref' => 'Book Reference',
+    'field_song_ref' => 'Song Reference',
+    'field_lila_ref' => 'Lila Reference',
+  ];
+  
+  foreach ($reference_fields as $field_name => $label) {
+    if (!FieldStorageConfig::loadByName('node', $field_name)) {
+      FieldStorageConfig::create([
+        'field_name' => $field_name,
+        'entity_type' => 'node',
+        'type' => 'entity_reference',
+        'settings' => [
+          'target_type' => 'node',
+        ],
+        'cardinality' => 1,
+      ])->save();
+    }
+  }
+  
+  // Create field instances for each content type
+  $field_instances = [
+    // BG chapters
+    'bg_chapter' => [
+      'field_number' => [
+        'label' => 'Chapter Number',
+        'required' => TRUE,
+      ],
+      'field_book_ref' => [
+        'label' => 'Book',
+        'required' => FALSE,
+        'settings' => [
+          'handler' => 'default:node',
+          'handler_settings' => [
+            'target_bundles' => ['page'],
+          ],
+        ],
+      ],
+    ],
+    // SB songs
+    'sb_song' => [
+      'field_number' => [
+        'label' => 'Song Number',
+        'required' => TRUE,
+      ],
+      'field_title' => [
+        'label' => 'Title',
+        'required' => TRUE,
+      ],
+    ],
+    // SB chapters
+    'sb_chapter' => [
+      'field_number' => [
+        'label' => 'Chapter Number',
+        'required' => TRUE,
+      ],
+      'field_song_ref' => [
+        'label' => 'Song',
+        'required' => TRUE,
+        'settings' => [
+          'handler' => 'default:node',
+          'handler_settings' => [
+            'target_bundles' => ['sb_song'],
+          ],
+        ],
+      ],
+    ],
+    // CC lilas
+    'cc_lila' => [
+      'field_number' => [
+        'label' => 'Lila Number',
+        'required' => TRUE,
+      ],
+      'field_title' => [
+        'label' => 'Title',
+        'required' => TRUE,
+      ],
+    ],
+    // CC chapters
+    'cc_chapter' => [
+      'field_number' => [
+        'label' => 'Chapter Number',
+        'required' => TRUE,
+      ],
+      'field_lila_ref' => [
+        'label' => 'Lila',
+        'required' => TRUE,
+        'settings' => [
+          'handler' => 'default:node',
+          'handler_settings' => [
+            'target_bundles' => ['cc_lila'],
+          ],
+        ],
+      ],
+    ],
+  ];
+  
+  foreach ($field_instances as $bundle => $fields) {
+    foreach ($fields as $field_name => $field_config) {
+      if (!FieldConfig::loadByName('node', $bundle, $field_name)) {
+        $config = [
+          'field_name' => $field_name,
+          'entity_type' => 'node',
+          'bundle' => $bundle,
+          'label' => $field_config['label'],
+          'required' => $field_config['required'],
+        ];
+        
+        if (isset($field_config['settings'])) {
+          $config['settings'] = $field_config['settings'];
+        }
+        
+        FieldConfig::create($config)->save();
+      }
+    }
+  }
+  
+  // Enable book for our content types
+  $book_allowed_types = \Drupal::configFactory()
+    ->getEditable('book.settings')
+    ->get('allowed_types') ?: [];
+  
+  $our_types = [
+    'bg', 'bg_chapter',
+    'sb', 'sb_chapter', 'sb_song',
+    'cc', 'cc_chapter', 'cc_lila',
+  ];
+  
+  $book_allowed_types = array_unique(array_merge($book_allowed_types, $our_types));
+  
+  \Drupal::configFactory()
+    ->getEditable('book.settings')
+    ->set('allowed_types', $book_allowed_types)
+    ->save();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function shloka_uninstall() {
+  // Remove our configuration
+  \Drupal::configFactory()->getEditable('shloka.settings')->delete();
+  
+  // Note: We don't delete fields as they might be used by other modules
+  // or contain important data
+}

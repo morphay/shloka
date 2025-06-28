@@ -1,0 +1,6 @@
+shloka.admin:
+  title: 'Shloka Settings'
+  description: 'Configure sacred books structure'
+  parent: system.admin_config_content
+  route_name: shloka.admin
+  weight: 100

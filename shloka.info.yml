@@ -1,0 +1,13 @@
+name: 'Shloka'
+type: module
+description: 'Автоматизация структуры и иерархии для священных книг'
+package: Custom
+core_version_requirement: ^11
+dependencies:
+  - drupal:book
+  - drupal:menu_ui
+  - menutree:menu_tree
+  - drupal:pathauto
+  - drupal:content_translation
+  - drupal:node
+configure: shloka.admin
